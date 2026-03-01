@@ -1,0 +1,19 @@
+# Secrets — never commit
+.env
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.python-version
+
+# Recon output (contains scraped data)
+scripts/recon_page.html
+scripts/recon_network.json
+
+# PRD and generated docs
+PRD.*
+
+# OS
+.DS_Store

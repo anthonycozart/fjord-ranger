@@ -1,0 +1,29 @@
+# HTTP client (replaces Playwright for scraping)
+httpx==0.28.1
+
+# Web framework + webhook server
+fastapi==0.115.8
+uvicorn[standard]==0.34.0
+
+# Scheduling
+APScheduler==3.11.0
+
+# Database
+SQLAlchemy==2.0.38
+alembic==1.14.1
+psycopg2-binary==2.9.10
+
+# AI agent
+anthropic==0.49.0
+
+# SMS
+twilio==9.4.5
+
+# Timezone support (stdlib zoneinfo needs tzdata on some systems)
+tzdata==2025.1
+
+# Local dev — loads .env file automatically (not used in production)
+python-dotenv==1.0.1
+
+# Browser automation — kept for v2 agentic booking only
+playwright==1.50.0

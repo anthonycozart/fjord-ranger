@@ -1,0 +1,25 @@
+**Available Slot:**
+- Session: {session_name}
+- Day: {day_of_week}, {date}
+- Start Time: {start_time} PT
+- Duration: {duration_minutes} minutes
+- Spots Available: {remaining_spots} of {total_spots}
+- Price: ${price_usd}
+- Location: {location}
+
+**User Preferences:**
+{criteria_json}
+
+**Your Task:**
+Evaluate whether this slot satisfies the user's preferences. Check each criterion they have specified:
+1. Does the day match their preferred_days? (if specified)
+2. Does the start time fall within their time_window? (if specified)
+3. Does the session name match their session_names? (if specified)
+4. Are there enough spots to meet their min_spots requirement? (if specified)
+
+**Output Format:**
+Return valid JSON with this exact structure:
+{{
+  "matches": true or false,
+  "reasoning": "One sentence explaining which criteria matched or which specific criterion caused a mismatch."
+}}
