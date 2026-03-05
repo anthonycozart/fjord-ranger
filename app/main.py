@@ -1,9 +1,10 @@
 """
 Fjord Ranger — main entry point.
 
-Starts two APScheduler jobs:
+Starts three APScheduler jobs:
   - run_scrape_cycle: every 5 minutes, 6am–10pm PT
   - check_dead_mans_switch: every 2 hours
+  - run_janitor: nightly at midnight PT
 
 Also mounts the FastAPI app for the Twilio SMS webhook.
 """
@@ -20,6 +21,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from fastapi import FastAPI
 from zoneinfo import ZoneInfo
 
+from app.jobs.janitor import run_janitor
 from app.jobs.scrape_job import check_dead_mans_switch, run_scrape_cycle
 from app.notifications.webhook import router as sms_router
 
@@ -58,6 +60,16 @@ async def startup():
         trigger=IntervalTrigger(hours=2),
         id="dead_mans_switch",
         name="Dead-man's switch",
+    )
+
+    # Nightly janitor: reset daily counters and expire stale slot states
+    scheduler.add_job(
+        run_janitor,
+        trigger=CronTrigger(hour=0, minute=0, timezone=PT),
+        id="janitor",
+        name="Nightly janitor",
+        max_instances=1,
+        misfire_grace_time=300,  # allow up to 5 min late (e.g. cold starts)
     )
 
     scheduler.start()

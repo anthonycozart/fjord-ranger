@@ -7,6 +7,25 @@ from sqlalchemy.orm import Session, joinedload
 from app.db.models import User, UserCriteria, UserSlotState
 
 
+def get_bulk_release_users(db: Session) -> list[User]:
+    """
+    Return active users who have opted into bulk release notifications.
+
+    Checks for criteria["bulk_release_alerts"] == true (JSON boolean).
+    Uses joinedload so user.criteria remains accessible after session closes.
+    """
+    return (
+        db.query(User)
+        .join(UserCriteria, User.id == UserCriteria.user_id)
+        .options(joinedload(User.criteria))
+        .filter(
+            User.status == "active",
+            UserCriteria.criteria["bulk_release_alerts"].astext == "true",
+        )
+        .all()
+    )
+
+
 def get_notifiable_users(db: Session) -> list[User]:
     """
     Return active users who have criteria set and haven't hit their daily cap.

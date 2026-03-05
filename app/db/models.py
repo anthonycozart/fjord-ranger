@@ -7,6 +7,8 @@ Tables:
   slots             — canonical registry of every Momence session seen
   user_slot_states  — per-user state machine for each slot
   notifications     — outbound SMS log, maps slot_codes to slots for reply disambiguation
+  messages          — full conversation thread per user (user + assistant turns)
+  agent_turns       — observability log: LLM thinking, tool calls, and responses
 """
 
 from datetime import datetime
@@ -63,6 +65,8 @@ class User(Base):
     criteria        = relationship("UserCriteria", back_populates="user", uselist=False)
     slot_states     = relationship("UserSlotState", back_populates="user")
     notifications   = relationship("Notification", back_populates="user")
+    messages        = relationship("Message", back_populates="user")
+    agent_turns     = relationship("AgentTurn", back_populates="user")
 
     def __repr__(self):
         return f"<User id={self.id} phone={self.phone_number} status={self.status}>"
@@ -237,3 +241,66 @@ class Notification(Base):
 
     def __repr__(self):
         return f"<Notification id={self.id} code={self.slot_code} user={self.user_id} slot={self.momence_id}>"
+
+
+# ---------------------------------------------------------------------------
+# Messages  (conversation thread)
+# ---------------------------------------------------------------------------
+
+class Message(Base):
+    """
+    One turn in the SMS conversation between the user and the agent.
+
+    role values:
+      user       — inbound SMS from the user
+      assistant  — outbound SMS from Fjord Ranger (notifications and replies)
+
+    Stored for every exchange so the conversation agent has full history
+    and so you can replay and study the conversation flow.
+    """
+
+    __tablename__ = "messages"
+
+    id          = Column(Integer, primary_key=True, autoincrement=True)
+    user_id     = Column(Integer, ForeignKey("users.id"), nullable=False)
+    role        = Column(String(10), nullable=False)   # 'user' | 'assistant'
+    body        = Column(Text, nullable=False)
+    created_at  = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    user = relationship("User", back_populates="messages")
+
+    def __repr__(self):
+        return f"<Message id={self.id} user={self.user_id} role={self.role}>"
+
+
+# ---------------------------------------------------------------------------
+# Agent Turns  (observability log)
+# ---------------------------------------------------------------------------
+
+class AgentTurn(Base):
+    """
+    Full observability record for every conversation agent invocation.
+
+    Captures the LLM's extended thinking, every tool call with its inputs
+    and outputs, and the final response. Use this to study and tune the
+    agent's decision-making.
+
+    thinking_text  — raw extended thinking block(s), concatenated across rounds
+    tools_called   — JSONB array: [{tool, input, output}, ...]
+    """
+
+    __tablename__ = "agent_turns"
+
+    id              = Column(Integer, primary_key=True, autoincrement=True)
+    user_id         = Column(Integer, ForeignKey("users.id"), nullable=False)
+    message_in      = Column(Text, nullable=False)
+    thinking_text   = Column(Text, nullable=True)
+    tools_called    = Column(JSONB, nullable=True)
+    response_out    = Column(Text, nullable=False)
+    model           = Column(String(50), nullable=False)
+    created_at      = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    user = relationship("User", back_populates="agent_turns")
+
+    def __repr__(self):
+        return f"<AgentTurn id={self.id} user={self.user_id}>"
