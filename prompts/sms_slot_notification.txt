@@ -1,0 +1,4 @@
+Fjord 🤖: {session_name}
+{day} · {time} ({duration_minutes} min) · {spots} · ${price_usd}
+{booking_url}
+Code {slot_code} · Reply to respond · STOP to unsubscribe.

@@ -44,6 +44,13 @@ def _twiml(message: str) -> Response:
     return Response(content=xml, media_type="application/xml")
 
 
+def _twiml_multi(*messages: str) -> Response:
+    """Return a TwiML MessagingResponse that sends multiple SMS segments."""
+    body = "".join(f"<Message>{m}</Message>" for m in messages)
+    xml = f'<?xml version="1.0" encoding="UTF-8"?><Response>{body}</Response>'
+    return Response(content=xml, media_type="application/xml")
+
+
 def _twiml_empty() -> Response:
     """Return an empty TwiML response — no reply SMS sent.
 
@@ -119,11 +126,11 @@ def _handle_stop(from_number: str) -> Response:
 
 
 def _handle_signup(from_number: str) -> Response:
-    """Register a new user as pending.
+    """Register a new user as active.
 
-    Full criteria-collection onboarding is a future milestone. For now,
-    the user lands in 'pending' status and the admin sets their criteria
-    via the admin CLI. The reply message sets this expectation.
+    The keyword is the invite — no admin approval needed. Users start
+    active with no criteria, meaning they'll be notified of all slots
+    until they share preferences via a reply.
     """
     try:
         _validate_phone(from_number)
@@ -145,15 +152,20 @@ def _handle_signup(from_number: str) -> Response:
                 "You'll get a text when a slot matches your preferences."
             )
 
-        new_user = User(phone_number=from_number, status="pending")
+        new_user = User(phone_number=from_number, status="active")
         db.add(new_user)
         db.commit()
         logger.info("New user registered from %s (id=%d)", from_number, new_user.id)
 
-        return _twiml(
-            "Welcome to Fjord Ranger! You're on the list. "
-            "The admin will set up your slot preferences — "
-            "we'll text you when a match opens up. Reply STOP to unsubscribe."
+        return _twiml_multi(
+            "By texting \"steam\" to this number, you've consented to use \"Fjord Ranger\" "
+            "- your new sauna scheduling 🤖.\n\n"
+            "- T&Cs and Privacy Policy here: https://github.com/anthonycozart/fjord-ranger\n"
+            "- Message and data rates may apply.\n"
+            "- Reply STOP to unsubscribe.",
+            "Please share your preferences so we know when to text you about new availability. "
+            "You can be as general or specific as you like, just respond in natural language "
+            "(e.g., \"anytime\" or \"I prefer private sessions on Fridays, ideally after 4pm.\")",
         )
 
     except Exception as e:

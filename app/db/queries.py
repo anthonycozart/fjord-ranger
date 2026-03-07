@@ -28,14 +28,17 @@ def get_bulk_release_users(db: Session) -> list[User]:
 
 def get_notifiable_users(db: Session) -> list[User]:
     """
-    Return active users who have criteria set and haven't hit their daily cap.
-    These are the only users worth running the analyzer against.
+    Return active users who haven't hit their daily cap.
 
-    Uses joinedload so user.criteria remains accessible after the session closes.
+    Includes users with no criteria — they match all slots and will receive
+    a preferences nudge after their first notification.
+
+    Uses outerjoin + joinedload so user.criteria is accessible (possibly None)
+    after the session closes.
     """
     return (
         db.query(User)
-        .join(UserCriteria, User.id == UserCriteria.user_id)
+        .outerjoin(UserCriteria, User.id == UserCriteria.user_id)
         .options(joinedload(User.criteria))
         .filter(
             User.status == "active",

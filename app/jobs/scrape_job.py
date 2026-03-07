@@ -189,7 +189,7 @@ async def _analyze_and_queue(
                 db.close()
 
             try:
-                result = await matches_criteria(session, user.criteria.criteria)
+                result = await matches_criteria(session, user.criteria.criteria if user.criteria else None)
             except Exception as e:
                 logger.error(
                     "Analyzer error for slot %d / user %d: %s",
@@ -246,7 +246,7 @@ def _is_bulk_release(newly_available: list[MomenceSession]) -> bool:
 
 
 def _filter_slots_for_user(
-    slots: list[MomenceSession], criteria: dict
+    slots: list[MomenceSession], criteria: dict | None
 ) -> list[MomenceSession]:
     """
     Return slots that match a user's criteria using simple programmatic logic.
@@ -255,10 +255,15 @@ def _filter_slots_for_user(
     just want 1-2 illustrative matches for the announcement SMS, not a
     rigorous personalized notification decision.
 
+    If criteria is None or empty, all slots are returned (user has no preferences).
+
     Handles the Private Session North/South normalization: a user preference
     of "Private Session" matches both "Private Session (North)" and
     "Private Session (South)".
     """
+    if not criteria:
+        return slots
+
     preferred_days = set(criteria.get("preferred_days") or [])
     time_window = criteria.get("time_window") or {}
     earliest = time_window.get("earliest", "00:00")
@@ -329,7 +334,7 @@ async def _notify_bulk_release(newly_available: list[MomenceSession]) -> set[int
                 fresh_user = send_db.query(User).filter_by(id=captured_user_id).first()
                 if fresh_user is None or fresh_user.status != "active":
                     return False
-                return send_bulk_release_sms(fresh_user, matching, send_db)
+                return send_bulk_release_sms(fresh_user, matching, newly_available, send_db)
             finally:
                 send_db.close()
 

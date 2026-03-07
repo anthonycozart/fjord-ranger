@@ -43,14 +43,18 @@ class AnalysisResult:
 
 async def matches_criteria(
     session: MomenceSession,
-    criteria: dict,
+    criteria: dict | None,
 ) -> AnalysisResult:
     """
     Ask Claude Haiku whether a slot matches a user's criteria.
 
+    If criteria is None or empty, the user has no preferences set and we
+    treat every slot as a match — they'll receive a nudge after the first
+    notification prompting them to share preferences.
+
     Args:
         session:  The available MomenceSession to evaluate.
-        criteria: The user's criteria dict (from user_criteria.criteria).
+        criteria: The user's criteria dict, or None if not set.
 
     Returns:
         AnalysisResult(matches, reasoning).
@@ -59,6 +63,9 @@ async def matches_criteria(
         anthropic.APIError: On API failure (let caller decide whether to retry).
         ValueError: If Claude returns malformed JSON.
     """
+    if not criteria:
+        return AnalysisResult(matches=True, reasoning="No criteria set — notifying for all slots.")
+
     system_prompt = _load_prompt("analyzer_system.txt")
     user_prompt = _load_prompt("slot_match.txt").format(
         session_name=session.session_name,

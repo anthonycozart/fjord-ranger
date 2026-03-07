@@ -45,7 +45,6 @@ class User(Base):
     A registered Fjord Ranger user.
 
     status values:
-      pending    — signed up with keyword, hasn't finished criteria setup
       active     — receiving notifications
       paused     — temporarily opted out (user-requested)
       opted_out  — permanently unsubscribed (STOP or explicit request)
@@ -55,10 +54,11 @@ class User(Base):
 
     id                          = Column(Integer, primary_key=True)
     phone_number                = Column(String(20), unique=True, nullable=False)
-    status                      = Column(String(20), nullable=False, default="pending")
+    status                      = Column(String(20), nullable=False, default="active")
     max_notifications_per_day   = Column(SmallInteger, nullable=False, default=3)
     daily_notification_count    = Column(SmallInteger, nullable=False, default=0)
     daily_count_reset_at        = Column(Date, nullable=False, server_default=func.current_date())
+    preferences_nudge_sent      = Column(Boolean, nullable=False, default=False, server_default="false")
     created_at                  = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     # Relationships

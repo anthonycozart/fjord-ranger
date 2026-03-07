@@ -1,0 +1,4 @@
+Fjord 🤖: New slots on {date_range} just dropped, book fast.
+Matches for you: {matches_text}
+{url_text}
+STOP to unsubscribe.

@@ -21,6 +21,7 @@ import random
 import re
 import string
 from datetime import datetime, timezone
+from pathlib import Path
 
 from sqlalchemy.orm import Session
 
@@ -29,6 +30,12 @@ from app.db.queries import get_user_slot_state
 from app.scraper.momence import MomenceSession
 
 logger = logging.getLogger(__name__)
+
+PROMPTS_DIR = Path(__file__).parent.parent.parent / "prompts"
+_TMPL_SLOT = (PROMPTS_DIR / "sms_slot_notification.txt").read_text(encoding="utf-8")
+_TMPL_BULK_MATCHES = (PROMPTS_DIR / "sms_bulk_with_matches.txt").read_text(encoding="utf-8")
+_TMPL_BULK_NO_MATCHES = (PROMPTS_DIR / "sms_bulk_no_matches.txt").read_text(encoding="utf-8")
+_TMPL_NUDGE = (PROMPTS_DIR / "sms_preferences_nudge.txt").read_text(encoding="utf-8")
 
 # Valid US NANP number in E.164 format: +1, area code 2–9, then 9 more digits.
 # This rejects 911, 411, 611, short codes, and anything malformed.
@@ -56,15 +63,16 @@ def _generate_slot_code(db: Session) -> str:
 
 def _format_sms(session: MomenceSession, slot_code: str) -> str:
     pt = session.starts_at_pt
-    day = pt.strftime("%a %b %-d")
-    time = pt.strftime("%-I:%M %p")
     spots = f"{session.remaining_spots} spot{'s' if session.remaining_spots != 1 else ''}"
-
-    return (
-        f"Fjord Ranger: {session.session_name}\n"
-        f"{day} · {time} ({session.duration_minutes} min) · {spots} · ${int(session.price_usd)}\n"
-        f"{session.booking_url}\n"
-        f"Code {slot_code} · Reply to respond · STOP to unsubscribe."
+    return _TMPL_SLOT.format(
+        session_name=session.session_name,
+        day=pt.strftime("%a %b %-d"),
+        time=pt.strftime("%-I:%M %p"),
+        duration_minutes=session.duration_minutes,
+        spots=spots,
+        price_usd=int(session.price_usd),
+        booking_url=session.booking_url,
+        slot_code=slot_code,
     )
 
 
@@ -129,6 +137,11 @@ def notify_user(user: User, session: MomenceSession, db: Session) -> bool:
             "Notified user %d about slot %d (code=%s, sid=%s)",
             user.id, session.momence_id, slot_code, msg.sid,
         )
+
+        # First notification to a criteria-less user — send the preferences nudge
+        if user.criteria is None and not user.preferences_nudge_sent:
+            _send_preferences_nudge(user, db)
+
         return True
 
     except Exception as e:
@@ -140,9 +153,49 @@ def notify_user(user: User, session: MomenceSession, db: Session) -> bool:
         return False
 
 
+def _send_preferences_nudge(user: User, db: Session) -> None:
+    """
+    Send the preferences nudge SMS and mark it as sent. Best-effort —
+    failures are logged but never raised so the main notification stands.
+    """
+    from twilio.rest import Client
+
+    try:
+        client = Client(os.environ["TWILIO_ACCOUNT_SID"], os.environ["TWILIO_AUTH_TOKEN"])
+        client.messages.create(
+            body=_TMPL_NUDGE,
+            from_=os.environ["TWILIO_PHONE_NUMBER"],
+            to=user.phone_number,
+        )
+        user.preferences_nudge_sent = True
+        db.add(Message(user_id=user.id, role="assistant", body=_TMPL_NUDGE))
+        db.commit()
+        logger.info("Preferences nudge sent to user %d", user.id)
+    except Exception as e:
+        db.rollback()
+        logger.error(
+            "Failed to send preferences nudge to user %d: %s: %s",
+            user.id, type(e).__name__, e,
+        )
+
+
+def _format_date_range(slots: list[MomenceSession]) -> str:
+    """Format the date range of a list of slots, e.g. 'Apr 1–30' or 'Mar 28 – Apr 5'."""
+    dates = sorted({s.starts_at_pt.date() for s in slots})
+    if not dates:
+        return "new"
+    lo, hi = dates[0], dates[-1]
+    if lo == hi:
+        return lo.strftime("%b %-d")
+    if lo.month == hi.month:
+        return f"{lo.strftime('%b')} {lo.day}–{hi.day}"
+    return f"{lo.strftime('%b %-d')} – {hi.strftime('%b %-d')}"
+
+
 def send_bulk_release_sms(
     user: User,
     matching_slots: list[MomenceSession],
+    all_slots: list[MomenceSession],
     db: Session,
 ) -> bool:
     """
@@ -153,12 +206,16 @@ def send_bulk_release_sms(
 
     matching_slots — up to 2 slots from the bulk release that match this
                      user's criteria. May be empty if nothing matched.
+    all_slots      — all newly available slots in the bulk release, used to
+                     compute the date range shown in the message.
 
     Returns True on success, False on failure.
     """
     from twilio.rest import Client
 
     _validate_phone(user.phone_number)
+
+    date_range = _format_date_range(all_slots)
 
     if matching_slots:
         slot_summaries = []
@@ -169,20 +226,13 @@ def send_bulk_release_sms(
                 f"{slot.session_name} {pt.strftime('%a %b %-d')} · {pt.strftime('%-I:%M %p')}"
             )
             urls.append(slot.booking_url)
-        matches_text = " and ".join(slot_summaries)
-        url_text = " · ".join(urls)
-        body = (
-            f"Fjord Ranger: New slots just dropped — book fast.\n"
-            f"Matches for you: {matches_text}\n"
-            f"{url_text}\n"
-            f"STOP to unsubscribe."
+        body = _TMPL_BULK_MATCHES.format(
+            date_range=date_range,
+            matches_text=" and ".join(slot_summaries),
+            url_text=" · ".join(urls),
         )
     else:
-        body = (
-            "Fjord Ranger: New slots just dropped at Fjord — "
-            "get your phone out and book now.\n"
-            "STOP to unsubscribe."
-        )
+        body = _TMPL_BULK_NO_MATCHES.format(date_range=date_range)
 
     try:
         client = Client(
@@ -200,6 +250,11 @@ def send_bulk_release_sms(
             "Bulk release SMS sent to user %d (sid=%s, %d matching slot(s))",
             user.id, msg.sid, len(matching_slots),
         )
+
+        # First notification to a criteria-less user — send the preferences nudge
+        if user.criteria is None and not user.preferences_nudge_sent:
+            _send_preferences_nudge(user, db)
+
         return True
 
     except Exception as e:
