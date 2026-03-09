@@ -298,6 +298,8 @@ class AgentTurn(Base):
     tools_called    = Column(JSONB, nullable=True)
     response_out    = Column(Text, nullable=False)
     model           = Column(String(50), nullable=False)
+    input_tokens    = Column(Integer, nullable=True)
+    output_tokens   = Column(Integer, nullable=True)
     created_at      = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     user = relationship("User", back_populates="agent_turns")

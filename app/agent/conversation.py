@@ -366,6 +366,8 @@ async def handle_reply(user: User, message: str, db: Session) -> str:
     messages = [{"role": "user", "content": user_content}]
     all_thinking: list[str] = []
     all_tools: list[dict] = []
+    total_input_tokens = 0
+    total_output_tokens = 0
     reply = "I'm not sure how to help with that. Reply STOP to unsubscribe."
     t0 = time.perf_counter()
 
@@ -379,6 +381,11 @@ async def handle_reply(user: User, message: str, db: Session) -> str:
             tools=TOOLS,
             messages=messages,
         )
+
+        # Accumulate token usage across rounds
+        if response.usage:
+            total_input_tokens += response.usage.input_tokens
+            total_output_tokens += response.usage.output_tokens
 
         # Capture thinking blocks from this round
         for block in response.content:
@@ -439,6 +446,8 @@ async def handle_reply(user: User, message: str, db: Session) -> str:
         thinking_text="\n\n---\n\n".join(all_thinking) or None,
         tools_called=all_tools or None,
         response_out=reply,
+        input_tokens=total_input_tokens or None,
+        output_tokens=total_output_tokens or None,
         db=db,
     )
 
@@ -458,6 +467,8 @@ def _log_agent_turn(
     thinking_text: str | None,
     tools_called: list | None,
     response_out: str,
+    input_tokens: int | None,
+    output_tokens: int | None,
     db: Session,
 ) -> None:
     """Insert an agent_turns row. Failures are logged but never raised."""
@@ -470,6 +481,8 @@ def _log_agent_turn(
                 tools_called=tools_called,
                 response_out=response_out,
                 model=MODEL,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
             )
         )
         db.flush()
