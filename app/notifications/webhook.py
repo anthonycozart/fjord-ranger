@@ -160,7 +160,7 @@ def _handle_signup(from_number: str) -> Response:
         return _twiml_multi(
             "By texting \"steam\" to this number, you've consented to use \"Fjord Ranger\" "
             "- your new sauna scheduling 🤖.\n\n"
-            "- T&Cs and Privacy Policy here: https://github.com/anthonycozart/fjord-ranger\n"
+            "- T&Cs and Privacy Policy here: https://anthonycozart.github.io/fjord-ranger/\n"
             "- Message and data rates may apply.\n"
             "- Reply STOP to unsubscribe.",
             "Please share your preferences so we know when to text you about new availability. "
