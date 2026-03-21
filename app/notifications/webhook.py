@@ -158,14 +158,13 @@ def _handle_signup(from_number: str) -> Response:
         logger.info("New user registered from %s (id=%d)", from_number, new_user.id)
 
         return _twiml_multi(
-            "By texting \"steam\" to this number, you've consented to use \"Fjord Ranger\" "
-            "- your new sauna scheduling 🤖.\n\n"
-            "- T&Cs and Privacy Policy here: https://anthonycozart.github.io/fjord-ranger/\n"
-            "- Message and data rates may apply.\n"
-            "- Reply STOP to unsubscribe.",
+            "Welcome to Fjord Ranger! You've opted in to sauna slot alerts for Fjord (Sausalito). "
+            "Msg freq varies. Msg & data rates may apply. "
+            "Reply STOP to unsubscribe, HELP for help. "
+            "Terms & Privacy: https://anthonycozart.github.io/fjord-ranger/",
             "Please share your preferences so we know when to text you about new availability. "
             "You can be as general or specific as you like, just respond in natural language "
-            "(e.g., \"anytime\" or \"I prefer private sessions on Fridays, ideally after 4pm.\")",
+            "(e.g., \"anytime\" or \"I prefer private sessions on Fridays, ideally after 4pm.\").",
         )
 
     except Exception as e:
